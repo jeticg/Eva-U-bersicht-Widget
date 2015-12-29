@@ -32,6 +32,8 @@ style: """
     margin:0px
     text-align:center
     text-decoration:none
+    *
+        -webkit-transition: color, background-color 0.5s, 0.5s ease-in-out;
     .left
         position: fixed
         bottom: -25px
@@ -307,7 +309,7 @@ style: """
     .iTunesRatingBlock
         width:33px;height:10px;
         margin-left:1px;margin-right:1px;
-        background-color: rgba(256,256,256,0.5);
+        color: rgba(256,256,256,0.5);
         display:inline-block;
 
 """
@@ -322,11 +324,11 @@ render: -> """
                 <div style="font-size:30px;font-family:HeadlineA">ONLY</div>
             </div>
             <div style="width:190px;height:190px;margin-top:5px" id="iTunesCoverImg"></div>
-            <div class="iTunesRatingBlock" id="rate1"></div>
-            <div class="iTunesRatingBlock" id="rate2"></div>
-            <div class="iTunesRatingBlock" id="rate3"></div>
-            <div class="iTunesRatingBlock" id="rate4"></div>
-            <div class="iTunesRatingBlock" id="rate5"></div>
+            <div class="iTunesRatingBlock" id="rate1">★</div>
+            <div class="iTunesRatingBlock" id="rate2">★</div>
+            <div class="iTunesRatingBlock" id="rate3">★</div>
+            <div class="iTunesRatingBlock" id="rate4">★</div>
+            <div class="iTunesRatingBlock" id="rate5">★</div>
         </div>
         <div class="nav a2 CoverCell" target="_blank" href="#" id="44"><s></s><b1></b1></div>
         <div class="nav a2 CoverCell" target="_blank" href="#" id="45"><s1></s1><b></b></div>
@@ -788,7 +790,7 @@ update: (output, domEl) ->
         for element in $(domEl).find(".a0")
             work = (cell) -> () ->
                 $cell = $(cell)
-                $cell.find(".Wcontent").css("visibility","visible")
+                $cell.find(".Wcontent").css("visibility","visible").css("display"   ,"inline-block")
                 $cell.find(".id"      ).css("display"   ,"none"   )
                 colorChange($cell, "rgba(256,0,0,1)")
             setTimeout (work(element)), Math.random() * 1000
@@ -798,7 +800,7 @@ update: (output, domEl) ->
         for element in $(domEl).find(".a0")
             work = (cell) -> () ->
                 $cell = $(cell)
-                $cell.find(".Wcontent").css("visibility","hidden"      )
+                $cell.find(".Wcontent").css("visibility","hidden").css("display","none")
                 $cell.find(".id"      ).css("display"   ,"inline-block")
                 colorChange($cell, "rgba(10,10,10,1)")
             setTimeout (work(element)), Math.random() * 1000
@@ -834,11 +836,11 @@ update: (output, domEl) ->
     CPUAmount       = AllOutputs[2+i].split(' ')
     MemUsage        = AllOutputs[3+i].split(' ')
     Trashvalues     = AllOutputs[4+i].split(' ')
-    iTunesvalues    = AllOutputs[5+i].split('~')
+    iTunesvalues    = AllOutputs[5+i].split(' - ')
     Networkvalues   = AllOutputs[6+i].split(' ')
     Trashvalues="#{Trashvalues}".replace /,/g, ''
     Trashvalues="#{Trashvalues}".replace /\s+/g, ''
-    if (AllOutputs[5+i].indexOf("~ ~ ~ 0 ~ 0") > -1)
+    if (AllOutputs[5+i].indexOf("  -   -   -  0  -  0") > -1)
         $(domEl).find(".CoverCell").css("visibility","hidden")
         $(domEl).find("#44").css("visibility","hidden")
         $(domEl).find("#45").css("visibility","hidden")
