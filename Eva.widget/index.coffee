@@ -734,10 +734,12 @@ afterRender: (domEl) ->
     window.Nwarning=0;
     window.Mwarning=0;
     window.Owarning=0;
-    $(domEl).on 'click', '.iTunesPre', => @run "osascript -e 'tell application \"iTunes\" to previous track'"
-    $(domEl).on 'click', '.iTunesNext', => @run "osascript -e 'tell application \"iTunes\" to next track'"
-    $(domEl).on 'click', '.iTunesPause', => @run "osascript -e 'tell application \"iTunes\" to pause'"
-    $(domEl).on 'click', '.iTunesPlay', => @run "osascript -e 'tell application \"iTunes\" to play'"
+#   iTunes/Spotify controls
+    currentPlayer = -> window.currentPlayer or 'iTunes'
+    $(domEl).on 'click', '.iTunesPre', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to previous track'"
+    $(domEl).on 'click', '.iTunesNext', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to next track'"
+    $(domEl).on 'click', '.iTunesPause', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to pause'"
+    $(domEl).on 'click', '.iTunesPlay', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to play'"
     $(domEl).on 'click', '#TrashCell', => @run "osascript -e 'tell application \"Finder\" to empty'"
 #   Command to open up mounted volumes
     $(domEl).on 'click', '#66', => @run "ls /Volumes/ | awk -F'\t' '{ print $0}' > tmp.txt;i=1; cat tmp.txt | sed -e 's/[ ]/\\ /g ' | while read line; do if [ \"$i\" -eq 1 ]; then open /Volumes/\"${line}\"; fi; let i=i+1; done; rm tmp.txt
@@ -956,7 +958,9 @@ update: (output, domEl) ->
         $(domEl).find('.TrashSize').text("#{TrashEmpty}")
     else
         $(domEl).find('.TrashSize').text("#{Trashvalues}")
-    $(domEl).find('#iTunesCoverImg').html("<img style='width:190px;height:190px;margin-left:5px;' src='Eva.widget/album.jpg'>")
+    #Store current active player
+    window.currentPlayer = if iTunesvalues[5] then 'Spotify' else 'iTunes'
+    $(domEl).find('#iTunesCoverImg').html("<img style='width:190px;height:190px;margin-left:5px;' src='#{iTunesvalues[5] or 'Eva.widget/album.jpg'}'>")
 #   Dealing with rating
     if (iTunesvalues[4]>0)
         $(domEl).find('#rate1').css("visibility","visible")
