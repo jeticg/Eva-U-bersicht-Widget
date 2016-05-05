@@ -4,7 +4,7 @@
 ## attempting to customise the UI. Or you can contact me.
 ## Any advise or new idea is welcome. Do not hesitate to contact me, my email is: jetic@me.com
 # Refreshing Frequency is set to once every 1000ms
-refreshFrequency: 3000
+refreshFrequency: 4000
 # Information on cells
 ## Cells consists of three parts. A main body(nav), a top and a bottom(s and b). Cells are rotated
 ## 90 degrees to the current position. For special cells (Battery cell, iTunes cell), the toppings
