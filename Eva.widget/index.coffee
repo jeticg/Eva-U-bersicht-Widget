@@ -622,6 +622,8 @@ command:    "   pmset -g batt | grep \"%\" | awk 'BEGINN { FS = \";\" };{ print 
                 defaults read ~/Library/Preferences/ByHost/com.apple.notificationcenterui.*.plist | grep doNotDisturb' '=  | awk '{print $3}' &&
 
                 osascript 'Eva.widget/iTunes.scpt' &&
+                cat 'Eva.widget/lastfm.auth.conf' &&
+
                 ls -F /Volumes/ | awk -F'\t' '{ print $0}'
             "
 afterRender: (domEl) ->
@@ -741,6 +743,13 @@ afterRender: (domEl) ->
     $(domEl).on 'click', '.iTunesPause', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to pause'"
     $(domEl).on 'click', '.iTunesPlay', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to play'"
     $(domEl).on 'click', '#TrashCell', => @run "osascript -e 'tell application \"Finder\" to empty'"
+#   Last.fm scrobbler helpers
+    $.getScript './Eva.widget/lib/md5.min.js.lib', ->
+        window.sign_lfm_request = (data, secret) ->
+            str = ''
+            str += "#{k}#{data[k]}" for k in Object.keys(data).sort()
+            str += secret
+            data.api_sig = md5(str)
 #   Command to open up mounted volumes
     $(domEl).on 'click', '#66', => @run "ls /Volumes/ | awk -F'\t' '{ print $0}' > tmp.txt;i=1; cat tmp.txt | sed -e 's/[ ]/\\ /g ' | while read line; do if [ \"$i\" -eq 1 ]; then open /Volumes/\"${line}\"; fi; let i=i+1; done; rm tmp.txt
 "
@@ -861,6 +870,7 @@ update: (output, domEl) ->
     Networkvalues   = AllOutputs[5+i].split(' ')
     Disturbvalues   = AllOutputs[6+i]
     iTunesvalues    = AllOutputs[7+i].split('~')
+    LastFMKeys      = AllOutputs[8+i].split('~')
 
     Trashvalues="#{Trashvalues}".replace /,/g, ''
     Trashvalues="#{Trashvalues}".replace /\s+/g, ''
@@ -907,7 +917,7 @@ update: (output, domEl) ->
 #   Deliver output
     # Disks, all five disks are hidden by default, only when such disk exists shall it be displayed
     # Because each volume takes a single line in the output, we have to judge by the length of output
-    idisk = i+8
+    idisk = i+9
     if (AllOutputs.length > idisk+1)
         diskDisplay("#66", AllOutputs[idisk+0])
     else    $(domEl).find("#66").css("visibility","hidden")
@@ -982,6 +992,36 @@ update: (output, domEl) ->
         $(domEl).find('#rate5').css("visibility","visible")
     else
         $(domEl).find('#rate5').css("visibility","hidden")
+    # Scrobble current playing track
+    [lfm_user, lfm_key, lfm_secret, lfm_sk] = LastFMKeys
+    if (window.sign_lfm_request &&
+        /^[0-9a-z]{32}$/.test(lfm_key) &&
+        /^[0-9a-z]{32}$/.test(lfm_secret) &&
+        /^[0-9a-z]{32}$/.test(lfm_sk) &&
+        iTunesvalues[0] && iTunesvalues[1] &&
+        iTunesvalues[0] != window.currentTrackTitle ||
+        iTunesvalues[1] != window.currentTrackArtist
+    )
+        lfm_req =
+            method: 'track.scrobble'
+            track: iTunesvalues[0]
+            artist: iTunesvalues[1]
+            timestamp: new Date().getTime()
+            api_key: lfm_key
+            sk: lfm_sk
+        window.sign_lfm_request lfm_req, lfm_secret
+        lfm_req.format = 'json'
+        $.ajax "http://ws.audioscrobbler.com/2.0/",
+            method: 'POST'
+            data: lfm_req
+            dataType: 'json'
+            success: (data, textStatus, jqXHR) ->
+                #console.log('last.fm response: ', data)
+                window.currentTrackTitle = iTunesvalues[0]
+                window.currentTrackArtist = iTunesvalues[1]
+            error: (jqXHR, textStatus, errorThrown) ->
+                $(domEl).find('.PubIP').text("#{ErrorMessage}")
+
 #   Dealing with warnings
     # Bwarning stands for Battery warning, triggers when battery drops below 20% without charging.
     if (parseInt(Batterievalues[1]) <= 20 & Batterievalues[2].indexOf("discharging") > -1)
