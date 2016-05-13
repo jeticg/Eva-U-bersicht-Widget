@@ -994,7 +994,7 @@ update: (output, domEl) ->
         $(domEl).find('#rate5').css("visibility","hidden")
     # Scrobble current playing track
     [lfm_user, lfm_key, lfm_secret, lfm_sk] = LastFMKeys
-    if (window.sign_lfm_request &&
+    if (typeof window.sign_lfm_request is 'function' &&
         /^[0-9a-z]{32}$/.test(lfm_key) &&
         /^[0-9a-z]{32}$/.test(lfm_secret) &&
         /^[0-9a-z]{32}$/.test(lfm_sk) &&
@@ -1009,18 +1009,19 @@ update: (output, domEl) ->
             timestamp: new Date().getTime()
             api_key: lfm_key
             sk: lfm_sk
-        window.sign_lfm_request lfm_req, lfm_secret
-        lfm_req.format = 'json'
-        $.ajax "http://ws.audioscrobbler.com/2.0/",
-            method: 'POST'
-            data: lfm_req
-            dataType: 'json'
-            success: (data, textStatus, jqXHR) ->
-                #console.log('last.fm response: ', data)
-                window.currentTrackTitle = iTunesvalues[0]
-                window.currentTrackArtist = iTunesvalues[1]
-            error: (jqXHR, textStatus, errorThrown) ->
-                $(domEl).find('.PubIP').text("#{ErrorMessage}")
+        window.sign_lfm_request?(lfm_req, lfm_secret)
+        if lfm_req.api_sig
+            lfm_req.format = 'json'
+            $.ajax "http://ws.audioscrobbler.com/2.0/",
+                method: 'POST'
+                data: lfm_req
+                dataType: 'json'
+                success: (data, textStatus, jqXHR) ->
+                    #console.log('last.fm response: ', data)
+                    window.currentTrackTitle = iTunesvalues[0]
+                    window.currentTrackArtist = iTunesvalues[1]
+                error: (jqXHR, textStatus, errorThrown) ->
+                    $(domEl).find('.PubIP').text("#{ErrorMessage}")
 
 #   Dealing with warnings
     # Bwarning stands for Battery warning, triggers when battery drops below 20% without charging.
