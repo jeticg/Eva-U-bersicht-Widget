@@ -1021,8 +1021,7 @@ update: (output, domEl) ->
                     window.currentTrackTitle = iTunesvalues[0]
                     window.currentTrackArtist = iTunesvalues[1]
                 error: (jqXHR, textStatus, errorThrown) ->
-                    $(domEl).find('.PubIP').text("#{ErrorMessage}")
-
+                    $(domEl).find('#iTunesTrack').text("#{ErrorMessage}")
 #   Dealing with warnings
     # Bwarning stands for Battery warning, triggers when battery drops below 20% without charging.
     if (parseInt(Batterievalues[1]) <= 20 & Batterievalues[2].indexOf("discharging") > -1)
