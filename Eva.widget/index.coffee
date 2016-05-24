@@ -753,25 +753,27 @@ afterRender: (domEl) ->
             data.format = 'json'
             return data
 
-        _initCurrentTrackRecords = (title, artist, duration, tsNow, updatedNow = false) ->
+        _initCurrentTrackRecords = (title, artist, album, duration, tsNow, updatedNow = false) ->
             window.currentTrackTitle = title
             window.currentTrackArtist = artist
+            window.currentTrackAlbum = album
             window.currentTrackDuration = duration
             window.currentTrackStarted = tsNow
             window.currentTrackScrobbled = false
             window.currentTrackUpdatedNow = updatedNow
 
-        _scrobbleCurrentTrack = (key, secret, sk, ts) ->
+        _scrobbleCurrentTrack = (key, secret, sk, ts, ended = false) ->
             #console.log '_scrobbleCurrentTrack args: ', arguments
             defer = $.Deferred()
             durElapsed = ts - window.currentTrackStarted
             if (window.currentTrackScrobbled)
                 defer.resolve('current track scrobbled already')
-            else if (durElapsed > 4 * 60 * 1000 || durElapsed > window.currentTrackDuration * 1000 / 2)
+            else if (ended || durElapsed > 4 * 60 * 1000 || durElapsed > window.currentTrackDuration * 1000 / 2)
                 req = _prepareRequest {
                     method: 'track.scrobble'
                     track: window.currentTrackTitle
                     artist: window.currentTrackArtist
+                    album: window.currentTrackAlbum
                     timestamp: window.currentTrackStarted
                     duration: window.currentTrackDuration
                     api_key: key
@@ -784,30 +786,33 @@ afterRender: (domEl) ->
                     success: (data, textStatus, jqXHR) ->
                         #console.log('last.fm response: ', data)
                         window.currentTrackScrobbled = true
-                        defer.resolve([resp, textStatus, jqXHR])
+                        defer.resolve([data, textStatus, jqXHR])
                     error: (jqXHR, textStatus, errorThrown) ->
                         defer.reject(errorThrown, [jqXHR, textStatus, errorThrown])
             else
                 defer.resolve('duration elapsed too short')
             return defer.promise()
 
-        window.lfm_scrobble = (title, artist, duration, keys, success, failed) ->
+        window.lfm_scrobble = (title, artist, album, duration, keys, success, failed) ->
             [user, key, secret, sk] = keys
             #console.log('lfm_scrobble arguments', arguments)
             return unless title && artist && duration
             return unless [key, secret, sk].every((v) -> /^[0-9a-z]{32}$/.test v)
             tsNow = new Date().getTime()
             if (!window.currentTrackTitle || !window.currentTrackArtist)
-                _initCurrentTrackRecords(title, artist, duration, tsNow)
+                _initCurrentTrackRecords(title, artist, album, duration, tsNow)
 
-            _scrobbleCurrentTrack key, secret, sk, tsNow
+            newTrack = title != window.currentTrackTitle || artist != window.currentTrackArtist
+
+            _scrobbleCurrentTrack key, secret, sk, tsNow, newTrack
                 .then () ->
-                    console.log '_updateNowPlaying', arguments
-                    if (!window.currentTrackUpdatedNow || title != window.currentTrackTitle || artist != window.currentTrackArtist)
+                    #console.log '_updateNowPlaying', arguments
+                    if newTrack || !window.currentTrackUpdatedNow
                         req = _prepareRequest {
                             method: 'track.updateNowPlaying'
                             track: title
                             artist: artist
+                            album: album
                             duration: duration
                             api_key: key
                             sk: sk
@@ -818,7 +823,7 @@ afterRender: (domEl) ->
                             dataType: 'json'
                             success: (data, textStatus, jqXHR) ->
                                 #console.log('last.fm response: ', data)
-                                _initCurrentTrackRecords title, artist, duration, tsNow, true
+                                _initCurrentTrackRecords title, artist, album, duration, tsNow, true
                                 success?(false, [data, textStatus, jqXHR])
                             error: (jqXHR, textStatus, errorThrown) ->
                                 failed?(errorThrown, [jqXHR, textStatus, errorThrown])
@@ -1072,7 +1077,7 @@ update: (output, domEl) ->
     else
         $(domEl).find('#rate5').css("visibility","hidden")
     # Scrobble current playing track
-    window.lfm_scrobble?(trackTitle, trackArtist, trackDuration, LastFMKeys, null, (err, errData) ->
+    window.lfm_scrobble?(trackTitle, trackArtist, trackAlbum, trackDuration, LastFMKeys, null, (err, errData) ->
         $(domEl).find('#iTunesTrack').text("#{ErrorMessage}"))
 #   Dealing with warnings
     # Bwarning stands for Battery warning, triggers when battery drops below 20% without charging.
