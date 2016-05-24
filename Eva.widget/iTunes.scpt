@@ -4,35 +4,36 @@ set {player, status} to my check()
 
 try
     if player is not false and status is not false then
-        if player is "Spotify" then
+        if player is equal to "Spotify" then
             tell application "Spotify"
                 set coverURL to artwork url of current track
                 if status is "playing" or status is "paused" then
-                    set {tname, aname, alname, ttrack, trate} to {name, artist, album, track number, popularity} of current track
-                    return tname & "~" & aname & "~" & alname & "~" & ttrack & "~" & trate & "~" & coverURL
+                    set {tname, aname, alname, ttrack, trate, tduration} to {name, artist, album, track number, popularity, duration} of current track
+                    return tname & "~" & aname & "~" & alname & "~" & tduration & "~" & ttrack & "~" & trate & "~" & coverURL
                 else
-                    return " ~ ~ ~ 0 ~ 0"
+                    return " ~ ~ ~ 0 ~ 0 ~ 0"
                 end if
             end tell
+        else if player is equal to "iTunes" then
             tell application "iTunes"
                 set coverTarget to open for access (text 1 thru -12 of (path to me as text) & "album.jpg" as text) with write permission
                 set coverData to data of artwork 1 of current track
                 write coverData to coverTarget
                 close access coverTarget
                 if status is "playing" or status is "paused" then
-                    set {tname, aname, alname, ttrack, trate} to {name, artist, album, track number, rating} of current track
-                    return tname & "~" & aname & "~" & alname & "~" & ttrack & "~" & trate
+                    set {tname, aname, alname, ttrack, trate, tduration} to {name, artist, album, track number, rating, duration} of current track
+                    return tname & "~" & aname & "~" & alname & "~" & tduration & "~" & ttrack & "~" & trate
                 else
-                    return " ~ ~ ~ 0 ~ 0"
+                    return " ~ ~ ~ 0 ~ 0 ~ 0"
                 end if
             end tell
         else
-            return " ~ ~ ~ 0 ~ 0"
+            return " ~ ~ ~ 0 ~ 0 ~ 0"
         end if
     end if
-    return " ~ ~ ~ 0 ~ 0"
+    return " ~ ~ ~ 0 ~ 0 ~ 0"
 on error e
-    return " ~ ~ ~ 0 ~ 0"
+    return " ~ ~ ~ 0 ~ 0 ~ 0"
 end try
 
 on check()
