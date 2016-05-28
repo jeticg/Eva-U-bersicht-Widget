@@ -4,7 +4,7 @@
 ## attempting to customise the UI. Or you can contact me.
 ## Any advise or new idea is welcome. Do not hesitate to contact me, my email is: jetic@me.com
 # Refreshing Frequency is set to once every 1000ms
-refreshFrequency: 3000
+refreshFrequency: 4000
 # Information on cells
 ## Cells consists of three parts. A main body(nav), a top and a bottom(s and b). Cells are rotated
 ## 90 degrees to the current position. For special cells (Battery cell, iTunes cell), the toppings
@@ -622,6 +622,8 @@ command:    "   pmset -g batt | grep \"%\" | awk 'BEGINN { FS = \";\" };{ print 
                 defaults read ~/Library/Preferences/ByHost/com.apple.notificationcenterui.*.plist | grep doNotDisturb' '=  | awk '{print $3}' &&
 
                 osascript 'Eva.widget/iTunes.scpt' &&
+                cat 'Eva.widget/lastfm.auth.conf' &&
+
                 ls -F /Volumes/ | awk -F'\t' '{ print $0}'
             "
 afterRender: (domEl) ->
@@ -734,11 +736,100 @@ afterRender: (domEl) ->
     window.Nwarning=0;
     window.Mwarning=0;
     window.Owarning=0;
-    $(domEl).on 'click', '.iTunesPre', => @run "osascript -e 'tell application \"iTunes\" to previous track'"
-    $(domEl).on 'click', '.iTunesNext', => @run "osascript -e 'tell application \"iTunes\" to next track'"
-    $(domEl).on 'click', '.iTunesPause', => @run "osascript -e 'tell application \"iTunes\" to pause'"
-    $(domEl).on 'click', '.iTunesPlay', => @run "osascript -e 'tell application \"iTunes\" to play'"
+#   iTunes/Spotify controls
+    currentPlayer = -> window.currentPlayer or 'iTunes'
+    $(domEl).on 'click', '.iTunesPre', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to previous track'"
+    $(domEl).on 'click', '.iTunesNext', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to next track'"
+    $(domEl).on 'click', '.iTunesPause', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to pause'"
+    $(domEl).on 'click', '.iTunesPlay', => @run "osascript -e 'tell application \"#{currentPlayer()}\" to play'"
     $(domEl).on 'click', '#TrashCell', => @run "osascript -e 'tell application \"Finder\" to empty'"
+#   Last.fm scrobbler helpers
+    $.getScript './Eva.widget/lib/md5.min.js.lib', ->
+        _prepareRequest = (data, secret) ->
+            str = ''
+            str += "#{k}#{data[k]}" for k in Object.keys(data).sort()
+            str += secret
+            data.api_sig = md5(str)
+            data.format = 'json'
+            return data
+
+        _initCurrentTrackRecords = (title, artist, album, duration, tsNow, updatedNow = false) ->
+            window.currentTrackTitle = title
+            window.currentTrackArtist = artist
+            window.currentTrackAlbum = album
+            window.currentTrackDuration = duration
+            window.currentTrackStarted = tsNow
+            window.currentTrackScrobbled = false
+            window.currentTrackUpdatedNow = updatedNow
+
+        _scrobbleCurrentTrack = (key, secret, sk, ts, ended = false) ->
+            #console.log '_scrobbleCurrentTrack args: ', arguments
+            defer = $.Deferred()
+            durElapsed = ts - window.currentTrackStarted
+            if (window.currentTrackScrobbled)
+                defer.resolve('current track scrobbled already')
+            else if (ended || durElapsed > 4 * 60 * 1000 || durElapsed > window.currentTrackDuration * 1000 / 2)
+                req = _prepareRequest {
+                    method: 'track.scrobble'
+                    track: window.currentTrackTitle
+                    artist: window.currentTrackArtist
+                    album: window.currentTrackAlbum
+                    timestamp: window.currentTrackStarted
+                    duration: window.currentTrackDuration
+                    api_key: key
+                    sk: sk
+                }, secret
+                $.ajax "http://ws.audioscrobbler.com/2.0/",
+                    method: 'POST'
+                    data: req
+                    dataType: 'json'
+                    success: (data, textStatus, jqXHR) ->
+                        #console.log('last.fm response: ', data)
+                        window.currentTrackScrobbled = true
+                        defer.resolve([data, textStatus, jqXHR])
+                    error: (jqXHR, textStatus, errorThrown) ->
+                        defer.reject(errorThrown, [jqXHR, textStatus, errorThrown])
+            else
+                defer.resolve('duration elapsed too short')
+            return defer.promise()
+
+        window.lfm_scrobble = (title, artist, album, duration, keys, success, failed) ->
+            [user, key, secret, sk] = keys
+            #console.log('lfm_scrobble arguments', arguments)
+            return unless title && artist && duration
+            return unless [key, secret, sk].every((v) -> /^[0-9a-z]{32}$/.test v)
+            tsNow = new Date().getTime()
+            if (!window.currentTrackTitle || !window.currentTrackArtist)
+                _initCurrentTrackRecords(title, artist, album, duration, tsNow)
+
+            newTrack = title != window.currentTrackTitle || artist != window.currentTrackArtist
+
+            _scrobbleCurrentTrack key, secret, sk, tsNow, newTrack
+                .then () ->
+                    #console.log '_updateNowPlaying', arguments
+                    if newTrack || !window.currentTrackUpdatedNow
+                        req = _prepareRequest {
+                            method: 'track.updateNowPlaying'
+                            track: title
+                            artist: artist
+                            album: album
+                            duration: duration
+                            api_key: key
+                            sk: sk
+                        }, secret
+                        $.ajax "http://ws.audioscrobbler.com/2.0/",
+                            method: 'POST'
+                            data: req
+                            dataType: 'json'
+                            success: (data, textStatus, jqXHR) ->
+                                #console.log('last.fm response: ', data)
+                                _initCurrentTrackRecords title, artist, album, duration, tsNow, true
+                                success?(false, [data, textStatus, jqXHR])
+                            error: (jqXHR, textStatus, errorThrown) ->
+                                failed?(errorThrown, [jqXHR, textStatus, errorThrown])
+
+                .fail failed
+
 #   Command to open up mounted volumes
     $(domEl).on 'click', '#66', => @run "ls /Volumes/ | awk -F'\t' '{ print $0}' > tmp.txt;i=1; cat tmp.txt | sed -e 's/[ ]/\\ /g ' | while read line; do if [ \"$i\" -eq 1 ]; then open /Volumes/\"${line}\"; fi; let i=i+1; done; rm tmp.txt
 "
@@ -859,6 +950,11 @@ update: (output, domEl) ->
     Networkvalues   = AllOutputs[5+i].split(' ')
     Disturbvalues   = AllOutputs[6+i]
     iTunesvalues    = AllOutputs[7+i].split('~')
+    LastFMKeys      = AllOutputs[8+i].split('~')
+
+    # iTunes/Spotify values destructions
+    [trackTitle, trackArtist, trackAlbum, trackDuration, trackNumber, trackRating, trackCover] = iTunesvalues
+    trackDuration = parseInt trackDuration
 
     Trashvalues="#{Trashvalues}".replace /,/g, ''
     Trashvalues="#{Trashvalues}".replace /\s+/g, ''
@@ -872,7 +968,7 @@ update: (output, domEl) ->
         $(domEl).find("#44").css("visibility","visible")
         $(domEl).find("#45").css("visibility","visible")
         $(domEl).find("#48").css("visibility","visible")
-    iTunesvalues[3] = "0"+ iTunesvalues[3] if iTunesvalues[3] < 10
+    trackNumber = "0"+ trackNumber if trackNumber < 10
     if (parseInt(Networkvalues[0])>=1024)
         Networkvalues[0] = parseInt(Networkvalues[0])/1024
         if (parseInt(Networkvalues[0])>=1024)
@@ -905,7 +1001,7 @@ update: (output, domEl) ->
 #   Deliver output
     # Disks, all five disks are hidden by default, only when such disk exists shall it be displayed
     # Because each volume takes a single line in the output, we have to judge by the length of output
-    idisk = i+8
+    idisk = i+9
     if (AllOutputs.length > idisk+1)
         diskDisplay("#66", AllOutputs[idisk+0])
     else    $(domEl).find("#66").css("visibility","hidden")
@@ -945,9 +1041,9 @@ update: (output, domEl) ->
     $(domEl).find('.CPUU').text("#{Math.floor(CPUUsage/CPUAmount)}")
     $(domEl).find('.MEMU').text("#{Math.floor(MemUsage)}")
     $(domEl).find('.sal').text("#{timeSegment}")
-    $(domEl).find('#iTunesTrack').text("#{iTunesvalues[3]}")
-    $(domEl).find('#iTunesArtist').text("#{iTunesvalues[1]}")
-    $(domEl).find('#iTunesTitle').text("#{iTunesvalues[0]}")
+    $(domEl).find('#iTunesTrack').text("#{trackNumber}")
+    $(domEl).find('#iTunesArtist').text("#{trackArtist}")
+    $(domEl).find('#iTunesTitle').text("#{trackTitle}")
     $(domEl).find('.NetU').text("#{Networkvalues[0]}")
     $(domEl).find('.NetD').text("#{Networkvalues[1]}")
     $(domEl).find('.time').text("#{hour}:#{minutes}")
@@ -956,28 +1052,33 @@ update: (output, domEl) ->
         $(domEl).find('.TrashSize').text("#{TrashEmpty}")
     else
         $(domEl).find('.TrashSize').text("#{Trashvalues}")
-    $(domEl).find('#iTunesCoverImg').html("<img style='width:190px;height:190px;margin-left:5px;' src='Eva.widget/album.jpg'>")
+    #Store current active player
+    window.currentPlayer = if trackCover then 'Spotify' else 'iTunes'
+    $(domEl).find('#iTunesCoverImg').html("<img style='width:190px;height:190px;margin-left:5px;' src='#{trackCover or 'Eva.widget/album.jpg'}'>")
 #   Dealing with rating
-    if (iTunesvalues[4]>0)
+    if (trackRating>0)
         $(domEl).find('#rate1').css("visibility","visible")
     else
         $(domEl).find('#rate1').css("visibility","hidden")
-    if (iTunesvalues[4]>20)
+    if (trackRating>20)
         $(domEl).find('#rate2').css("visibility","visible")
     else
         $(domEl).find('#rate2').css("visibility","hidden")
-    if (iTunesvalues[4]>40)
+    if (trackRating>40)
         $(domEl).find('#rate3').css("visibility","visible")
     else
         $(domEl).find('#rate3').css("visibility","hidden")
-    if (iTunesvalues[4]>60)
+    if (trackRating>60)
         $(domEl).find('#rate4').css("visibility","visible")
     else
         $(domEl).find('#rate4').css("visibility","hidden")
-    if (iTunesvalues[4]>80)
+    if (trackRating>80)
         $(domEl).find('#rate5').css("visibility","visible")
     else
         $(domEl).find('#rate5').css("visibility","hidden")
+    # Scrobble current playing track
+    window.lfm_scrobble?(trackTitle, trackArtist, trackAlbum, trackDuration, LastFMKeys, null, (err, errData) ->
+        $(domEl).find('#iTunesTrack').text("#{ErrorMessage}"))
 #   Dealing with warnings
     # Bwarning stands for Battery warning, triggers when battery drops below 20% without charging.
     if (parseInt(Batterievalues[1]) <= 20 & Batterievalues[2].indexOf("discharging") > -1)
