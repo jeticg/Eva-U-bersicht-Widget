@@ -1,6 +1,6 @@
 Version = "0.X12a"
 config = {
-    Magnification: 1.0
+    Magnification: 0.7
     BatteryAlertLevel: 20
     CPUAlertLevel: 90
     Opacity: 0.5
